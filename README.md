@@ -24,6 +24,11 @@ A program to download the user manuals page by page from their interactive websi
    python setup.py
    ```
 
+3. Validate the installation:
+   ```bash
+   python validate_installation.py
+   ```
+
 This will install all required dependencies and set up the Chrome WebDriver automatically.
 
 ### Manual Installation
@@ -118,6 +123,26 @@ Run with `--no-headless` to see what the browser is doing:
 
 ```bash
 python kawasaki_downloader.py "URL" --no-headless -v
+```
+
+## Additional Scripts
+
+### validate_installation.py
+Validates that all components are properly installed and working:
+```bash
+python validate_installation.py
+```
+
+### example_usage.py
+Shows usage examples and demonstrates programmatic usage:
+```bash
+python example_usage.py --examples
+```
+
+### setup.py
+Automated setup script for dependencies and ChromeDriver:
+```bash
+python setup.py
 ```
 
 ## Requirements
