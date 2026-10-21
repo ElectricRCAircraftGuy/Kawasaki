@@ -26,15 +26,15 @@ Usage:
                                    --force splits anyway.
   $(basename "$0") join <file>     Join <file>.part_* back into <file> and verify
                                    it against <file>.sha256.
-  $(basename "$0") join            Join every split file found in manuals/.
+  $(basename "$0") join            Join every split file found under manuals/ (recursively).
   $(basename "$0") -h | --help     Show this help.
 
 Examples:
   # After 'git clone' or 'git pull', rebuild the full-resolution (4x) PDF:
-  ./split_join_large_files.sh join manuals/KX450_owners_manual_99803-0401_EN_4x.pdf
+  ./split_join_large_files.sh join manuals/kawasaki_manual_downloader/KX450_owners_manual_99803-0401_EN_4x.pdf
 
   # After regenerating a large PDF, split it so it can be committed:
-  ./split_join_large_files.sh split manuals/KX450_owners_manual_99803-0401_EN_4x.pdf
+  ./split_join_large_files.sh split manuals/kawasaki_manual_downloader/KX450_owners_manual_99803-0401_EN_4x.pdf
 USAGE
 }
 
@@ -115,14 +115,16 @@ join_file() {
 }
 
 join_all() {
-    shopt -s nullglob
-    local first_parts=("$DEFAULT_DIR"/*.part_000)
-    shopt -u nullglob
+    # Find split sets anywhere under manuals/ (including subfolders).
+    local first_parts=()
+    local p
+    while IFS= read -r -d '' p; do
+        first_parts+=("$p")
+    done < <(find "$DEFAULT_DIR" -type f -name '*.part_000' -print0 2>/dev/null | sort -z)
     if (( ${#first_parts[@]} == 0 )); then
-        echo "No split files found in '$DEFAULT_DIR'."
+        echo "No split files found under '$DEFAULT_DIR'."
         return 0
     fi
-    local p
     for p in "${first_parts[@]}"; do
         join_file "${p%.part_000}"
     done

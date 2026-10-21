@@ -10,31 +10,66 @@ Kawasaki publishes its owner's manuals as interactive page-flipping "eBooks" at 
 It only downloads the same public files your web browser downloads when you view the manual. No login is needed.
 
 
+## Implementations
+
+This repo has two independent implementations. Each has its own code, dependencies, and output folder, so they can be installed, run, tested, and compared separately:
+
+| | Root implementation (recommended) | Copilot implementation (from PR #1) |
+|---|---|---|
+| Code | [`kawasaki_manual_downloader.py`](kawasaki_manual_downloader.py) (repo root) | [`copilot_implementation/kawasaki_downloader.py`](copilot_implementation/kawasaki_downloader.py) |
+| Dependencies | [`requirements.txt`](requirements.txt): PyMuPDF, requests | [`copilot_implementation/requirements.txt`](copilot_implementation/requirements.txt): selenium, webdriver-manager, requests, plus the Chrome browser |
+| Output | the PDF path you give with `-o`. The committed PDFs are in [`manuals/kawasaki_manual_downloader/`](manuals/kawasaki_manual_downloader/) | page images in `copilot_implementation/output/` by default (ignored by git). Committed output goes in [`manuals/copilot_implementation/`](manuals/copilot_implementation/) (currently none; see below) |
+| Status on the KX450 manual | works: 212-page searchable PDF | **downloads 0 pages** (see [its README](copilot_implementation/README.md)) |
+
+Run and test each one separately:
+
+```bash
+# Root implementation
+python3 -m venv .venv && . .venv/bin/activate
+pip install -r requirements.txt
+./kawasaki_manual_downloader.py "https://pws.ktivs.net/dispeBook?file=99803-0401&lang_code=EN" -s 2 -o /tmp/ours_2x.pdf
+pdftotext /tmp/ours_2x.pdf - | grep -ci "engine oil"        # check the text layer
+deactivate
+
+# Copilot implementation
+cd copilot_implementation
+python3 -m venv .venv && . .venv/bin/activate
+pip install -r requirements.txt
+python -m unittest test_kawasaki                             # unit tests
+python validate_installation.py                              # environment checks
+python kawasaki_downloader.py "https://pws.ktivs.net/dispeBook?file=99803-0401&lang_code=EN" -m 2
+ls output/                                                   # downloaded page images, if any
+deactivate; cd ..
+```
+
+To compare the two, run both on the same URL and compare their output by content with [`pdf_diff.py`](pdf_diff.py) (`./pdf_diff.py ours.pdf theirs.pdf`). The Copilot implementation saves images, not a PDF, so its images would first need to be turned into a PDF (for example `img2pdf copilot_implementation/output/page_*.jpg -o /tmp/copilot.pdf`). For the KX450 manual it saved no images, so there was nothing to compare.
+
+
 ## Manuals
 
 | Model | Manual | Online viewer | PDF in this repo |
 |---|---|---|---|
-| KX450 (KX450MR) | Owner's Manual 99803-0401, English, **2x** (1800 x 1270 px per page, 49.9 MB, single file) | [KX450 user manual](https://pws.ktivs.net/dispeBook?file=99803-0401&lang_code=EN) | [manuals/KX450_owners_manual_99803-0401_EN.pdf](manuals/KX450_owners_manual_99803-0401_EN.pdf) |
-| KX450 (KX450MR) | Owner's Manual 99803-0401, English, **4x, full resolution** (3600 x 2540 px per page, 117.2 MB, split into 3 parts) | [KX450 user manual](https://pws.ktivs.net/dispeBook?file=99803-0401&lang_code=EN) | `manuals/KX450_owners_manual_99803-0401_EN_4x.pdf.part_000` ... `.part_002` + `.sha256`. Recombine it with the commands below |
+| KX450 (KX450MR) | Owner's Manual 99803-0401, English, **2x** (1800 x 1270 px per page, 49.9 MB, single file) | [KX450 user manual](https://pws.ktivs.net/dispeBook?file=99803-0401&lang_code=EN) | [manuals/kawasaki_manual_downloader/KX450_owners_manual_99803-0401_EN.pdf](manuals/kawasaki_manual_downloader/KX450_owners_manual_99803-0401_EN.pdf) |
+| KX450 (KX450MR) | Owner's Manual 99803-0401, English, **4x, full resolution** (3600 x 2540 px per page, 117.2 MB, split into 3 parts) | [KX450 user manual](https://pws.ktivs.net/dispeBook?file=99803-0401&lang_code=EN) | `manuals/kawasaki_manual_downloader/KX450_owners_manual_99803-0401_EN_4x.pdf.part_000` ... `.part_002` + `.sha256`. Recombine it with the commands below |
 
 GitHub won't accept files over 100 MB. So the 4x PDF is stored as three parts of 45 MiB or less (`.part_000`, `.part_001`, `.part_002`), plus a SHA-256 checksum file. The recombined 4x PDF is in `.gitignore`, so the whole file never gets committed.
 
 ### Large-file commands (`split_join_large_files.sh`)
 
 ```bash
-# After `git clone` or `git pull`: rebuild EVERY split PDF in manuals/ from its parts,
+# After `git clone` or `git pull`: rebuild EVERY split PDF under manuals/ (all subfolders) from its parts,
 # then check each one against its .sha256 checksum
 ./split_join_large_files.sh join
 
 # Rebuild ONE split file from <file>.part_000, .part_001, ..., and check its .sha256
 ./split_join_large_files.sh join <file>
-#   e.g.: ./split_join_large_files.sh join manuals/KX450_owners_manual_99803-0401_EN_4x.pdf
+#   e.g.: ./split_join_large_files.sh join manuals/kawasaki_manual_downloader/KX450_owners_manual_99803-0401_EN_4x.pdf
 
 # After regenerating a large PDF: split it into 45 MB parts and write <file>.sha256.
 # It skips the split (and says so) if the PDF's content is the same as the existing
 # parts. Add --force to split anyway: ./split_join_large_files.sh split --force <file>
 ./split_join_large_files.sh split <file>
-#   e.g.: ./split_join_large_files.sh split manuals/KX450_owners_manual_99803-0401_EN_4x.pdf
+#   e.g.: ./split_join_large_files.sh split manuals/kawasaki_manual_downloader/KX450_owners_manual_99803-0401_EN_4x.pdf
 
 # Show help
 ./split_join_large_files.sh -h
@@ -51,7 +86,7 @@ cd Kawasaki
 The same thing by hand, without the script:
 
 ```bash
-cd manuals
+cd manuals/kawasaki_manual_downloader
 cat KX450_owners_manual_99803-0401_EN_4x.pdf.part_* > KX450_owners_manual_99803-0401_EN_4x.pdf
 sha256sum -c KX450_owners_manual_99803-0401_EN_4x.pdf.sha256
 ```
@@ -60,9 +95,9 @@ A full example: regenerate, split, and commit the 4x PDF:
 
 ```bash
 ./kawasaki_manual_downloader.py "https://pws.ktivs.net/dispeBook?file=99803-0401&lang_code=EN" \
-    -o manuals/KX450_owners_manual_99803-0401_EN_4x.pdf
-./split_join_large_files.sh split manuals/KX450_owners_manual_99803-0401_EN_4x.pdf
-git add manuals/KX450_owners_manual_99803-0401_EN_4x.pdf.part_* manuals/KX450_owners_manual_99803-0401_EN_4x.pdf.sha256
+    -o manuals/kawasaki_manual_downloader/KX450_owners_manual_99803-0401_EN_4x.pdf
+./split_join_large_files.sh split manuals/kawasaki_manual_downloader/KX450_owners_manual_99803-0401_EN_4x.pdf
+git add manuals/kawasaki_manual_downloader/KX450_owners_manual_99803-0401_EN_4x.pdf.part_* manuals/kawasaki_manual_downloader/KX450_owners_manual_99803-0401_EN_4x.pdf.sha256
 ```
 
 `split` runs `split -b 45M -d -a 3` and also writes `<file>.sha256`. For a new large file, add its whole-file name to `.gitignore` too.
@@ -95,11 +130,11 @@ Put the manual's URL in quotes, because it has a `&` in it:
 
 # KX450 owner's manual, at the highest resolution the viewer offers (4x, ~117.2 MB)
 ./kawasaki_manual_downloader.py "https://pws.ktivs.net/dispeBook?file=99803-0401&lang_code=EN" \
-    -o manuals/KX450_owners_manual_99803-0401_EN_4x.pdf
+    -o manuals/kawasaki_manual_downloader/KX450_owners_manual_99803-0401_EN_4x.pdf
 
 # The exact command used to make the PDF in this repo (2x, 49.9 MB)
 ./kawasaki_manual_downloader.py "https://pws.ktivs.net/dispeBook?file=99803-0401&lang_code=EN" \
-    -s 2 -o manuals/KX450_owners_manual_99803-0401_EN.pdf
+    -s 2 -o manuals/kawasaki_manual_downloader/KX450_owners_manual_99803-0401_EN.pdf
 ```
 
 Options:
@@ -119,7 +154,7 @@ Options:
 
 The script waits at least 0.5 s between requests and retries failed requests with backoff. Downloading the KX450 manual's 212 pages takes about 5 to 8 minutes.
 
-To check that the text layer works: `pdftotext manuals/KX450_owners_manual_99803-0401_EN.pdf - | grep -i "engine oil"`
+To check that the text layer works: `pdftotext manuals/kawasaki_manual_downloader/KX450_owners_manual_99803-0401_EN.pdf - | grep -i "engine oil"`
 
 
 ## Checking whether a regenerated PDF really changed
@@ -133,15 +168,15 @@ Regenerating a manual gives the **exact same bytes** every time, as long as the 
 
 # Compare a PDF with the version committed in git: HEAD by default, or any revision.
 # If git has the file as split parts, they're joined automatically.
-./pdf_diff.py manuals/KX450_owners_manual_99803-0401_EN.pdf --against-git
-./pdf_diff.py manuals/KX450_owners_manual_99803-0401_EN_4x.pdf --against-git HEAD~1
+./pdf_diff.py manuals/kawasaki_manual_downloader/KX450_owners_manual_99803-0401_EN.pdf --against-git
+./pdf_diff.py manuals/kawasaki_manual_downloader/KX450_owners_manual_99803-0401_EN_4x.pdf --against-git HEAD~1
 
 # Compare a PDF with a split set on disk, or with git objects directly
 # (REV:path; ":path" = the staged version)
-./pdf_diff.py new.pdf manuals/KX450_owners_manual_99803-0401_EN_4x.pdf.part_000
-./pdf_diff.py new.pdf HEAD:manuals/KX450_owners_manual_99803-0401_EN.pdf
+./pdf_diff.py new.pdf manuals/kawasaki_manual_downloader/KX450_owners_manual_99803-0401_EN_4x.pdf.part_000
+./pdf_diff.py new.pdf HEAD:manuals/kawasaki_manual_downloader/KX450_owners_manual_99803-0401_EN.pdf
 
-# Check EVERY PDF in manuals/ (whole files and split sets) against HEAD (or a REV),
+# Check EVERY PDF under manuals/ (all subfolders; whole files and split sets) against HEAD (or a REV),
 # and list each one as NEW, CHANGED, or UNCHANGED. -v shows which pages differ.
 ./check_pdfs_changed.sh
 ./check_pdfs_changed.sh -v HEAD
@@ -158,6 +193,33 @@ git commit --no-verify                   # skip the hook for one commit
 ```
 
 
+## Comparison of implementations
+
+Measured on 2026-10-20 on this repo's Linux box, using the KX450 owner's manual URL (`https://pws.ktivs.net/dispeBook?file=99803-0401&lang_code=EN`). Anything not measured is marked as such.
+
+| | Root implementation (`kawasaki_manual_downloader.py`) | Copilot implementation (`copilot_implementation/kawasaki_downloader.py`) |
+|---|---|---|
+| How it finds pages | Reads the viewer page's JSON to find the eBook folder, then fetches `book.xml` (ordered page list, size, max zoom) and `menu.xml` (TOC) directly | Opens the URL in headless Chrome (Selenium), looks for page `<img>`/`<canvas>` elements with generic CSS selectors, and clicks a "next" button |
+| How it fetches pages | Direct HTTP downloads of each page's JPEG (`page<ID>/x2/x2.jpg`, `x4/x4.jpg`, ...) and its `textpoint.xml` | Downloads whichever image `src` it finds on the top-level page (or a canvas snapshot) |
+| Dependencies | PyMuPDF, requests | selenium, webdriver-manager, requests, plus Chrome |
+| Output format | One PDF | Separate page image files (no PDF) |
+| Resolution / quality | Viewer's own JPEGs embedded unchanged: 4x = 3600x2540 px (default), 2x = 1800x1270 px, 1x = 900x635 px | Not measured (no pages were downloaded) |
+| Searchable text | Yes: invisible text layer from the viewer's `textpoint.xml` (no OCR). `pdftotext` finds "engine oil" 42 times in the 2x PDF | No (images only) |
+| Bookmarks / TOC | Yes, 62 bookmarks from `menu.xml` | No |
+| Deterministic output / duplicate detection | Yes: a fresh download gave a byte-identical PDF (same sha256 as the committed 2x). `pdf_diff.py`, `check_pdfs_changed.sh`, `split` skip, and the opt-in pre-commit hook catch unchanged regenerated PDFs | No |
+| Speed | 2x from scratch (download + build): **431.3 s**. From the local cache (build only): 2x 41.6-44.6 s, 4x 42.0-43.4 s. 4x from scratch: not measured with the current version | `-m 2`: **407.4 s for 0 pages**. `-m 1`: **207.6 s for 0 pages**. A default run (`-m 100`) was stopped after about 4 min with 0 pages. Full run: not measured |
+| Output size | 2x: 49,884,379 bytes (49.9 MB). 4x: 117,195,430 bytes (117.2 MB, committed as 3 split parts) | 0 bytes (no files produced) |
+| Page count | 212 (matches `book.xml` and the viewer) | 0 |
+| `pdf_diff.py` between them | Not applicable: the Copilot implementation produced no PDF (or images) to compare | (same) |
+| Robustness / retries / rate limit | ≥0.5 s between requests, 5 retries with exponential backoff, image validation, progress/ETA | Fixed 1 s + 2 s sleeps per page. Single-attempt image downloads (errors are logged, not retried). 10 s implicit wait per missing selector. Errors in the loop are logged and skipped, so the run reports success even with 0 pages |
+| Generality | Any manual on the same FLIPPER viewer (`dispeBook?file=...&lang_code=...`). Not tested on manuals other than KX450 | Meant for generic page-flip sites via guessed selectors. Not tested on other sites |
+| Known limitations | Site-specific: depends on the viewer's `book.xml`/`page<ID>`/`textpoint.xml` layout. Cover/back-cover artwork has no text layer, so "KX450" isn't searchable there. A few illustration labels come out as run-together words in the text layer | On this site: invalid CSS selectors (`:contains()` is jQuery-only) raise an error every iteration. The flip-book is in a separate document (`/assets/manuals/<book>/index.html`) that the script never searches. No PDF output. See [its README](copilot_implementation/README.md) |
+
+Notes:
+- Output folders: the root implementation's committed PDFs are in [`manuals/kawasaki_manual_downloader/`](manuals/kawasaki_manual_downloader/) (2x 49.9 MB, plus 4x 117.2 MB as 45 + 45 + 21.8 MiB parts). The Copilot implementation writes to `copilot_implementation/output/`, and its committed-output folder [`manuals/copilot_implementation/`](manuals/copilot_implementation/) has only a README, because no files were produced.
+- The Copilot implementation's unit tests (8 tests) and `validate_installation.py` pass. They test setup and helper logic, not a live download.
+
+
 ## How it works
 
 1. The `dispeBook?file=...&lang_code=...` page has a JSON `data-page` attribute whose `props.url` points to the eBook folder (`/proxy/manuals/<book>/index.html`, which redirects to `/assets/manuals/<book>/`).
@@ -168,7 +230,7 @@ git commit --no-verify                   # skip the hook for one commit
 
 ## License and copyright
 
-- **Code and documentation:** Everything in this repo **except the downloaded manuals** is covered by this repo's [LICENSE](LICENSE) file (GNU GPL v3). That includes `kawasaki_manual_downloader.py`, `split_join_large_files.sh`, `pdf_diff.py`, `check_pdfs_changed.sh`, `hooks/`, `requirements.txt`, and this README.
-- **Manuals / PDFs:** The manuals, and every PDF or image made from them, including everything in the [`manuals/`](manuals/) folder (the `.pdf` files, the split `.part_NNN` files, and anything recombined from them), are **copyrighted by Kawasaki** ("© 2023 Kawasaki Motors, Ltd.", as printed in the KX450 manual. Kawasaki Motors, Ltd. is part of the Kawasaki Heavy Industries group). They are **NOT** covered by this repo's license, and the license grants no rights to them. All rights to them belong to their copyright holder. They are stored here only as a personal reference copy of a manual that Kawasaki publishes for free online. See [`manuals/README.md`](manuals/README.md).
+- **Code and documentation:** Everything in this repo **except the downloaded manuals** is covered by this repo's [LICENSE](LICENSE) file (GNU GPL v3). That includes `kawasaki_manual_downloader.py`, `split_join_large_files.sh`, `pdf_diff.py`, `check_pdfs_changed.sh`, `hooks/`, `requirements.txt`, the Copilot implementation in `copilot_implementation/`, and this README.
+- **Manuals / PDFs:** The manuals, and every PDF or image made from them, including everything in the [`manuals/`](manuals/) folder and its subfolders (the `.pdf` files, the split `.part_NNN` files, and anything recombined from them), are **copyrighted by Kawasaki** ("© 2023 Kawasaki Motors, Ltd.", as printed in the KX450 manual. Kawasaki Motors, Ltd. is part of the Kawasaki Heavy Industries group). They are **NOT** covered by this repo's license, and the license grants no rights to them. All rights to them belong to their copyright holder. They are stored here only as a personal reference copy of a manual that Kawasaki publishes for free online. See [`manuals/README.md`](manuals/README.md) and the README in each subfolder.
 
 This project is not affiliated with, endorsed by, or sponsored by Kawasaki. "Kawasaki" and model names are trademarks of their respective owners.
