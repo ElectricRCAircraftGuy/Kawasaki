@@ -6,6 +6,8 @@
 
 ## Verification (2026-10-20)
 
+This is a short record. The full description of the fixes, the browser-hang fix, the full run, and how the byte-identity check was done is in **[Fixes and test results (2026-10-20)](../../copilot_implementation/README.md#fixes-and-test-results-2026-10-20)** in the implementation's README.
+
 Command, run from the repo root in a venv with `copilot_implementation/requirements.txt` (Chrome 155, selenium 4.51.0), default settings:
 
 ```bash
