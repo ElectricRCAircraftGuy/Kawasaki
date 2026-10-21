@@ -8,3 +8,7 @@ cache/
 # never commit the recombined whole file.
 manuals/kawasaki_manual_downloader/KX450_owners_manual_99803-0401_EN_4x.pdf
 *.tmp
+
+# The Copilot (backup) implementation's PDFs are not committed; only its verification
+# record is (see manuals/copilot_implementation/README.md).
+manuals/copilot_implementation/*.pdf

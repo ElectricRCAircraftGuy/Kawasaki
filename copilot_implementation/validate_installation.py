@@ -49,7 +49,8 @@ def check_dependencies():
     dependencies = [
         ('requests', 'HTTP requests'),
         ('selenium', 'Web automation'),
-        ('webdriver_manager', 'WebDriver management')
+        ('webdriver_manager', 'WebDriver management'),
+        ('img2pdf', 'PDF assembly')
     ]
     
     all_available = True

@@ -30,7 +30,9 @@ def download_example_manual():
         # Create downloader with custom settings
         with KawasakiDownloader(output_dir=output_dir, headless=True) as downloader:
             print("Starting download...")
-            downloader.download_manual(manual_url, max_pages=10)  # Limit to 10 pages for demo
+            count = downloader.download_manual(manual_url, max_pages=10)  # Limit to 10 pages for demo
+            if count:
+                downloader.build_pdf(Path(output_dir) / "manual.pdf")
             
         print("\nDownload completed!")
         print(f"Check the '{output_dir}' folder for downloaded images.")

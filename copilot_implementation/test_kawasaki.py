@@ -28,7 +28,7 @@ class TestKawasakiDownloader(unittest.TestCase):
     def setUp(self):
         """Set up test fixtures."""
         self.temp_dir = tempfile.mkdtemp()
-        self.downloader = KawasakiDownloader(output_dir=self.temp_dir, headless=True)
+        self.downloader = KawasakiDownloader(output_dir=self.temp_dir, headless=True, retry_delay=0)
         
     def tearDown(self):
         """Clean up after tests."""
@@ -87,6 +87,42 @@ class TestKawasakiDownloader(unittest.TestCase):
         self.assertIsNotNone(logger)
         self.assertEqual(logger.name, 'kawasaki_downloader')
         self.assertTrue(len(logger.handlers) > 0)
+
+
+class TestFixes(unittest.TestCase):
+    """Tests for the fixes: page-image detection, PDF assembly, exit codes."""
+
+    def test_page_image_regex(self):
+        from kawasaki_downloader import PAGE_IMG_RE
+        m = PAGE_IMG_RE.search("https://x/assets/manuals/book/pageLLUL46TJ29M4J/x4/x4.jpg?c=1")
+        self.assertEqual((m.group(1), m.group(2)), ("LLUL46TJ29M4J", "4"))
+        m = PAGE_IMG_RE.search("https://x/assets/manuals/book/pageLLUL46TJ29M4J/x1.jpg?c=1")
+        self.assertEqual((m.group(1), m.group(3)), ("LLUL46TJ29M4J", "1"))
+        self.assertIsNone(PAGE_IMG_RE.search("https://x/html5/images/icon.png"))
+
+    def test_exit_code_nonzero_when_no_pages_saved(self):
+        import kawasaki_downloader as kd
+        with tempfile.TemporaryDirectory() as tmp, \
+                patch.object(kd.KawasakiDownloader, "download_manual", return_value=0):
+            rc = kd.main(["https://example.com/manual", "-o", tmp])
+        self.assertEqual(rc, 1)
+
+    def test_build_pdf_from_saved_pages(self):
+        try:
+            import img2pdf  # noqa: F401
+            from PIL import Image
+        except ImportError:
+            self.skipTest("img2pdf/Pillow not installed")
+        with tempfile.TemporaryDirectory() as tmp:
+            d = KawasakiDownloader(output_dir=tmp)
+            for i in (1, 2):
+                path = Path(tmp) / f"page_{i:04d}.jpg"
+                Image.new("RGB", (90, 60), (i * 50, 0, 0)).save(path, "JPEG")
+                d.saved_pages.append(path)
+            pdf = d.build_pdf(Path(tmp) / "out.pdf")
+            data = pdf.read_bytes()
+            self.assertTrue(data.startswith(b"%PDF"))
+            self.assertEqual(data.count(b"/Type /Page") - data.count(b"/Type /Pages"), 2)
 
 
 class TestUtilityFunctions(unittest.TestCase):

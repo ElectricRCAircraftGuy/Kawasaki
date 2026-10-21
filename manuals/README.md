@@ -5,7 +5,7 @@ Each subfolder holds the output of one implementation, so it's clear which progr
 | Folder | Made by | Contents |
 |---|---|---|
 | [`kawasaki_manual_downloader/`](kawasaki_manual_downloader/) | the root implementation, [`kawasaki_manual_downloader.py`](../kawasaki_manual_downloader.py) | KX450 owner's manual: 2x PDF (49.9 MB) plus the 4x PDF (117.2 MB) as split parts + `.sha256` |
-| [`copilot_implementation/`](copilot_implementation/) | the Copilot implementation, [`copilot_implementation/kawasaki_downloader.py`](../copilot_implementation/kawasaki_downloader.py) | no PDF: on the KX450 manual it downloaded 0 pages (see that folder's README) |
+| [`copilot_implementation/`](copilot_implementation/) | the Copilot implementation, [`copilot_implementation/kawasaki_downloader.py`](../copilot_implementation/kawasaki_downloader.py) | no PDF (it would duplicate the 4x pages above, which it reproduced byte for byte): only a verification record and a per-page SHA-256 list (see that folder's README). This is the backup and cross-check implementation |
 
 Each subfolder's README gives the exact command and settings that produced its files. To rebuild split PDFs after `git clone` / `git pull`, run `./split_join_large_files.sh join` from the repo root.
 
