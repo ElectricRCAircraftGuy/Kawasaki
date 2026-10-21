@@ -1,0 +1,174 @@
+# Kawasaki
+A program to download the user manuals page by page from their interactive websites. 
+
+Kawasaki publishes its owner's manuals as interactive page-flipping "eBooks" at <https://pws.ktivs.net>. `kawasaki_manual_downloader.py` takes the link to one of these manuals, downloads every page in order, and saves the whole manual as a single PDF. The PDF:
+
+- uses the highest-resolution page images the viewer offers (or a lower resolution if you pick one),
+- is **text-searchable and text-selectable**: the viewer's own per-page text data (the glyph positions it uses for its search feature) goes into an invisible text layer on top of each page image. This uses no OCR, so the text matches the manual exactly,
+- has clickable bookmarks built from the manual's table of contents.
+
+It only downloads the same public files your web browser downloads when you view the manual. No login is needed.
+
+
+## Manuals
+
+| Model | Manual | Online viewer | PDF in this repo |
+|---|---|---|---|
+| KX450 (KX450MR) | Owner's Manual 99803-0401, English, **2x** (1800 x 1270 px per page, 49.9 MB, single file) | [KX450 user manual](https://pws.ktivs.net/dispeBook?file=99803-0401&lang_code=EN) | [manuals/KX450_owners_manual_99803-0401_EN.pdf](manuals/KX450_owners_manual_99803-0401_EN.pdf) |
+| KX450 (KX450MR) | Owner's Manual 99803-0401, English, **4x, full resolution** (3600 x 2540 px per page, 117.2 MB, split into 3 parts) | [KX450 user manual](https://pws.ktivs.net/dispeBook?file=99803-0401&lang_code=EN) | `manuals/KX450_owners_manual_99803-0401_EN_4x.pdf.part_000` ... `.part_002` + `.sha256`. Recombine it with the commands below |
+
+GitHub won't accept files over 100 MB. So the 4x PDF is stored as three parts of 45 MiB or less (`.part_000`, `.part_001`, `.part_002`), plus a SHA-256 checksum file. The recombined 4x PDF is in `.gitignore`, so the whole file never gets committed.
+
+### Large-file commands (`split_join_large_files.sh`)
+
+```bash
+# After `git clone` or `git pull`: rebuild EVERY split PDF in manuals/ from its parts,
+# then check each one against its .sha256 checksum
+./split_join_large_files.sh join
+
+# Rebuild ONE split file from <file>.part_000, .part_001, ..., and check its .sha256
+./split_join_large_files.sh join <file>
+#   e.g.: ./split_join_large_files.sh join manuals/KX450_owners_manual_99803-0401_EN_4x.pdf
+
+# After regenerating a large PDF: split it into 45 MB parts and write <file>.sha256.
+# It skips the split (and says so) if the PDF's content is the same as the existing
+# parts. Add --force to split anyway: ./split_join_large_files.sh split --force <file>
+./split_join_large_files.sh split <file>
+#   e.g.: ./split_join_large_files.sh split manuals/KX450_owners_manual_99803-0401_EN_4x.pdf
+
+# Show help
+./split_join_large_files.sh -h
+```
+
+A full example: clone, then rebuild the 4x PDF:
+
+```bash
+git clone https://github.com/ElectricRCAircraftGuy/Kawasaki.git   # or: git pull
+cd Kawasaki
+./split_join_large_files.sh join
+```
+
+The same thing by hand, without the script:
+
+```bash
+cd manuals
+cat KX450_owners_manual_99803-0401_EN_4x.pdf.part_* > KX450_owners_manual_99803-0401_EN_4x.pdf
+sha256sum -c KX450_owners_manual_99803-0401_EN_4x.pdf.sha256
+```
+
+A full example: regenerate, split, and commit the 4x PDF:
+
+```bash
+./kawasaki_manual_downloader.py "https://pws.ktivs.net/dispeBook?file=99803-0401&lang_code=EN" \
+    -o manuals/KX450_owners_manual_99803-0401_EN_4x.pdf
+./split_join_large_files.sh split manuals/KX450_owners_manual_99803-0401_EN_4x.pdf
+git add manuals/KX450_owners_manual_99803-0401_EN_4x.pdf.part_* manuals/KX450_owners_manual_99803-0401_EN_4x.pdf.sha256
+```
+
+`split` runs `split -b 45M -d -a 3` and also writes `<file>.sha256`. For a new large file, add its whole-file name to `.gitignore` too.
+
+To find other manuals, browse <https://pws.ktivs.net/manuals>, open a manual, and copy its `https://pws.ktivs.net/dispeBook?file=...&lang_code=...` link.
+
+
+## Installation
+
+Requires Python 3.9 or newer. Tested on Linux (Ubuntu).
+
+```bash
+git clone https://github.com/ElectricRCAircraftGuy/Kawasaki.git
+cd Kawasaki
+
+python3 -m venv .venv
+. .venv/bin/activate
+pip install -r requirements.txt
+```
+
+The only Python dependencies are [PyMuPDF](https://pypi.org/project/PyMuPDF/) and [requests](https://pypi.org/project/requests/). You don't need to install any other system packages, such as OCR tools.
+
+
+## Usage
+
+Put the manual's URL in quotes, because it has a `&` in it:
+
+```bash
+. .venv/bin/activate
+
+# KX450 owner's manual, at the highest resolution the viewer offers (4x, ~117.2 MB)
+./kawasaki_manual_downloader.py "https://pws.ktivs.net/dispeBook?file=99803-0401&lang_code=EN" \
+    -o manuals/KX450_owners_manual_99803-0401_EN_4x.pdf
+
+# The exact command used to make the PDF in this repo (2x, 49.9 MB)
+./kawasaki_manual_downloader.py "https://pws.ktivs.net/dispeBook?file=99803-0401&lang_code=EN" \
+    -s 2 -o manuals/KX450_owners_manual_99803-0401_EN.pdf
+```
+
+Options:
+
+```
+./kawasaki_manual_downloader.py -h
+
+  url                   Manual viewer URL (quote it!)
+  -o, --output OUTPUT   Output PDF path (default: Kawasaki_manual_<file>_<lang>.pdf)
+  -s, --scale SCALE     Page image resolution: 1, 2, 4, ... or 'max' (default: max)
+  --no-text             Do not add the invisible, searchable text layer (images only)
+  --delay DELAY         Minimum seconds between HTTP requests (default: 0.5)
+  --retries RETRIES     Retries per request (default: 5)
+  --page-width-mm MM    Physical PDF page width in mm (default: 210, i.e. A5 landscape)
+  --cache-dir DIR       Save downloaded files here, and reuse them on later runs
+```
+
+The script waits at least 0.5 s between requests and retries failed requests with backoff. Downloading the KX450 manual's 212 pages takes about 5 to 8 minutes.
+
+To check that the text layer works: `pdftotext manuals/KX450_owners_manual_99803-0401_EN.pdf - | grep -i "engine oil"`
+
+
+## Checking whether a regenerated PDF really changed
+
+Regenerating a manual gives the **exact same bytes** every time, as long as the source pages haven't changed. The downloader writes no run-time timestamps (the PDF dates come from the manual's own publish date). Its PDF `/ID` is a hash of the page images and text, not a random value. So a plain `sha256sum` comparison usually works. These tools also compare by *content*: page count, each page's embedded images, each page's text, page sizes, and bookmarks. That way PDFs that differ only in metadata still count as the same. They work offline, on local files and git, and never download anything.
+
+```bash
+# Compare two PDFs by content. Exit code: 0 = same, 1 = different, 2 = error,
+# 3 = no committed version found (for git inputs)
+./pdf_diff.py a.pdf b.pdf
+
+# Compare a PDF with the version committed in git: HEAD by default, or any revision.
+# If git has the file as split parts, they're joined automatically.
+./pdf_diff.py manuals/KX450_owners_manual_99803-0401_EN.pdf --against-git
+./pdf_diff.py manuals/KX450_owners_manual_99803-0401_EN_4x.pdf --against-git HEAD~1
+
+# Compare a PDF with a split set on disk, or with git objects directly
+# (REV:path; ":path" = the staged version)
+./pdf_diff.py new.pdf manuals/KX450_owners_manual_99803-0401_EN_4x.pdf.part_000
+./pdf_diff.py new.pdf HEAD:manuals/KX450_owners_manual_99803-0401_EN.pdf
+
+# Check EVERY PDF in manuals/ (whole files and split sets) against HEAD (or a REV),
+# and list each one as NEW, CHANGED, or UNCHANGED. -v shows which pages differ.
+./check_pdfs_changed.sh
+./check_pdfs_changed.sh -v HEAD
+```
+
+`pdf_diff.py` gives a short summary of the differences, e.g. `page count: 211 vs 212`, `pages only in B: 50`, `page A100 vs B100: text differ`.
+
+**Optional git pre-commit hook** (not installed by default): it blocks a commit if a staged PDF, or a split PDF's parts/checksum, has the same content as in HEAD.
+
+```bash
+git config core.hooksPath hooks          # install (this repo only)
+git config --unset core.hooksPath        # uninstall
+git commit --no-verify                   # skip the hook for one commit
+```
+
+
+## How it works
+
+1. The `dispeBook?file=...&lang_code=...` page has a JSON `data-page` attribute whose `props.url` points to the eBook folder (`/proxy/manuals/<book>/index.html`, which redirects to `/assets/manuals/<book>/`).
+2. The eBook is a FLIPPER HTML5 book. `<book>/book.xml` gives the page count, the page size, the maximum zoom, and the ordered list of page IDs. `<book>/menu.xml` is the table of contents.
+3. Each page is a JPEG at `<book>/page<ID>/x1.jpg`, `.../x2/x2.jpg`, or `.../x4/x4.jpg`. Each page's text comes from `<book>/page<ID>/textpoint.xml`, which lists every character with its position.
+4. Each JPEG goes into the PDF unchanged (no re-compression). Then the text is written over it in invisible text (PDF render mode 3), placed and stretched to cover each word.
+
+
+## License and copyright
+
+- **Code and documentation:** Everything in this repo **except the downloaded manuals** is covered by this repo's [LICENSE](LICENSE) file (GNU GPL v3). That includes `kawasaki_manual_downloader.py`, `split_join_large_files.sh`, `pdf_diff.py`, `check_pdfs_changed.sh`, `hooks/`, `requirements.txt`, and this README.
+- **Manuals / PDFs:** The manuals, and every PDF or image made from them, including everything in the [`manuals/`](manuals/) folder (the `.pdf` files, the split `.part_NNN` files, and anything recombined from them), are **copyrighted by Kawasaki** ("© 2023 Kawasaki Motors, Ltd.", as printed in the KX450 manual. Kawasaki Motors, Ltd. is part of the Kawasaki Heavy Industries group). They are **NOT** covered by this repo's license, and the license grants no rights to them. All rights to them belong to their copyright holder. They are stored here only as a personal reference copy of a manual that Kawasaki publishes for free online. See [`manuals/README.md`](manuals/README.md).
+
+This project is not affiliated with, endorsed by, or sponsored by Kawasaki. "Kawasaki" and model names are trademarks of their respective owners.
