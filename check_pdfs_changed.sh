@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# Check every PDF in manuals/ against the version committed in git (HEAD by
+# Check every PDF under manuals/ (recursively) against the version committed in git (HEAD by
 # default) and say whether it's NEW, CHANGED, or UNCHANGED, by content (pages,
 # images, text, bookmarks; see pdf_diff.py), not by bytes.
 #
@@ -33,17 +33,15 @@ fi
 rev="${1:-HEAD}"
 dir="${2:-$SCRIPT_DIR/manuals}"
 
-# Collect each PDF once: whole files, plus split sets (by their base name).
+# Collect each PDF once (recursively): whole files, plus split sets (by base name).
 declare -A seen=()
 pdfs=()
-shopt -s nullglob
-for f in "$dir"/*.pdf "$dir"/*.pdf.part_000; do
+while IFS= read -r -d '' f; do
     base="${f%.part_000}"
     [[ -n "${seen[$base]:-}" ]] && continue
     seen[$base]=1
     pdfs+=("$base")
-done
-shopt -u nullglob
+done < <(find "$dir" -type f \( -name '*.pdf' -o -name '*.pdf.part_000' \) -print0 | sort -z)
 
 if (( ${#pdfs[@]} == 0 )); then
     echo "No PDFs found in '$dir'."
