@@ -1,0 +1,54 @@
+#!/usr/bin/env bash
+#
+# Opt-in git pre-commit hook: block commits that stage a PDF (or a split PDF's
+# .part_NNN / .sha256 files) whose content is identical to the version already
+# in HEAD. That is, a regenerated PDF that didn't really change.
+#
+# Install (from the repo root):   git config core.hooksPath hooks
+# Uninstall:                      git config --unset core.hooksPath
+# Skip once:                      git commit --no-verify
+#
+# Runs offline: compares the staged (index) version against HEAD with
+# pdf_diff.py (content-level: pages, images, text, bookmarks).
+
+set -euo pipefail
+
+root="$(git rev-parse --show-toplevel)"
+PYTHON="${PYTHON:-python3}"
+PDF_DIFF="$root/pdf_diff.py"
+
+# No HEAD yet (first commit): nothing to compare against.
+git rev-parse --verify -q HEAD > /dev/null || exit 0
+[[ -f "$PDF_DIFF" ]] || exit 0
+
+# Staged added/modified PDFs, split parts, and checksum files -> base PDF paths.
+declare -A bases=()
+while IFS= read -r -d '' path; do
+    case "$path" in
+        *.pdf) bases["$path"]=1 ;;
+        *.pdf.part_[0-9][0-9][0-9]) bases["${path%.part_*}"]=1 ;;
+        *.pdf.sha256) bases["${path%.sha256}"]=1 ;;
+    esac
+done < <(git diff --cached --name-only --diff-filter=AM -z)
+
+(( ${#bases[@]} == 0 )) && exit 0
+
+blocked=()
+for base in "${!bases[@]}"; do
+    rc=0
+    "$PYTHON" "$PDF_DIFF" -q ":$base" "HEAD:$base" || rc=$?
+    case "$rc" in
+        0) blocked+=("$base") ;;
+        1|3) ;;  # changed or new: OK to commit
+        *) echo "pre-commit: warning: could not compare '$base' (pdf_diff.py exit $rc); allowing it." >&2 ;;
+    esac
+done
+
+if (( ${#blocked[@]} > 0 )); then
+    echo "pre-commit: these staged PDFs have the SAME content as in HEAD:" >&2
+    printf '  %s\n' "${blocked[@]}" >&2
+    echo "Unstage them (git restore --staged <files>; git checkout -- <files>)," >&2
+    echo "or commit anyway with: git commit --no-verify" >&2
+    exit 1
+fi
+exit 0

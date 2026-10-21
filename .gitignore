@@ -1,0 +1,10 @@
+__pycache__/
+*.pyc
+.venv/
+venv/
+cache/
+
+# Large files are committed only as split parts (see split_join_large_files.sh);
+# never commit the recombined whole file.
+manuals/KX450_owners_manual_99803-0401_EN_4x.pdf
+*.tmp
