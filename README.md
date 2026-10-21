@@ -12,14 +12,14 @@ It only downloads the same public files your web browser downloads when you view
 
 ## Implementations
 
-This repo has two independent implementations. Each has its own code, dependencies, and output folder, so they can be installed, run, tested, and compared separately:
+This repo has two independent implementations. Each has its own code, dependencies, and output folder, so they can be installed, run, tested, and compared separately. **The root implementation is the primary tool.** The Copilot implementation is kept as a **backup and cross-check**: a browser-based fallback in case the viewer's internal file layout changes, which is slower and more fragile.
 
-| | Root implementation (recommended) | Copilot implementation (from PR #1) |
+| | Root implementation (primary) | Copilot implementation (backup and cross-check, from PR #1, fixed) |
 |---|---|---|
 | Code | [`kawasaki_manual_downloader.py`](kawasaki_manual_downloader.py) (repo root) | [`copilot_implementation/kawasaki_downloader.py`](copilot_implementation/kawasaki_downloader.py) |
-| Dependencies | [`requirements.txt`](requirements.txt): PyMuPDF, requests | [`copilot_implementation/requirements.txt`](copilot_implementation/requirements.txt): selenium, webdriver-manager, requests, plus the Chrome browser |
-| Output | the PDF path you give with `-o`. The committed PDFs are in [`manuals/kawasaki_manual_downloader/`](manuals/kawasaki_manual_downloader/) | page images in `copilot_implementation/output/` by default (ignored by git). Committed output goes in [`manuals/copilot_implementation/`](manuals/copilot_implementation/) (currently none; see below) |
-| Status on the KX450 manual | works: 212-page searchable PDF | **downloads 0 pages** (see [its README](copilot_implementation/README.md)) |
+| Dependencies | [`requirements.txt`](requirements.txt): PyMuPDF, requests | [`copilot_implementation/requirements.txt`](copilot_implementation/requirements.txt): selenium, webdriver-manager, requests, img2pdf, plus the Chrome browser |
+| Output | the PDF path you give with `-o`. The committed PDFs are in [`manuals/kawasaki_manual_downloader/`](manuals/kawasaki_manual_downloader/) | page images + `manual.pdf` in `copilot_implementation/output/` by default (ignored by git). Its PDF is **not committed**, because its pages are byte-identical to the root implementation's 4x pages. [`manuals/copilot_implementation/`](manuals/copilot_implementation/) has the verification record and per-page hashes |
+| Status on the KX450 manual | works: 212-page searchable PDF with bookmarks | works: 212-page image-only PDF, every page image byte-identical to the root 4x PDF |
 
 Run and test each one separately:
 
@@ -31,18 +31,18 @@ pip install -r requirements.txt
 pdftotext /tmp/ours_2x.pdf - | grep -ci "engine oil"        # check the text layer
 deactivate
 
-# Copilot implementation
+# Copilot implementation (needs Chrome)
 cd copilot_implementation
 python3 -m venv .venv && . .venv/bin/activate
 pip install -r requirements.txt
 python -m unittest test_kawasaki                             # unit tests
 python validate_installation.py                              # environment checks
-python kawasaki_downloader.py "https://pws.ktivs.net/dispeBook?file=99803-0401&lang_code=EN" -m 2
-ls output/                                                   # downloaded page images, if any
+python kawasaki_downloader.py "https://pws.ktivs.net/dispeBook?file=99803-0401&lang_code=EN" -m 4   # first 4 pages
+ls output/                                                   # page images + manual.pdf
 deactivate; cd ..
 ```
 
-To compare the two, run both on the same URL and compare their output by content with [`pdf_diff.py`](pdf_diff.py) (`./pdf_diff.py ours.pdf theirs.pdf`). The Copilot implementation saves images, not a PDF, so its images would first need to be turned into a PDF (for example `img2pdf copilot_implementation/output/page_*.jpg -o /tmp/copilot.pdf`). For the KX450 manual it saved no images, so there was nothing to compare.
+To compare the two, compare their PDFs by content with [`pdf_diff.py`](pdf_diff.py), e.g. `./pdf_diff.py manuals/kawasaki_manual_downloader/KX450_owners_manual_99803-0401_EN_4x.pdf copilot_implementation/output/manual.pdf`, or compare the page images by hash as described in [`manuals/copilot_implementation/README.md`](manuals/copilot_implementation/README.md).
 
 
 ## Manuals
@@ -197,27 +197,35 @@ git commit --no-verify                   # skip the hook for one commit
 
 Measured on 2026-10-20 on this repo's Linux box, using the KX450 owner's manual URL (`https://pws.ktivs.net/dispeBook?file=99803-0401&lang_code=EN`). Anything not measured is marked as such.
 
+### How each approach works
+
+- **Root implementation (primary): reads the viewer's data files directly.** It reads the `dispeBook` page's JSON to find the eBook folder. Then it downloads `book.xml` (the ordered page list, page size, and max zoom) and `menu.xml` (the table of contents). For each page it downloads the page JPEG (`page<ID>/x4/x4.jpg` etc.) and `textpoint.xml` (every character and its position) with plain HTTP requests: no browser, at least 0.5 s apart, with retries. It builds the PDF with PyMuPDF: each JPEG is embedded unchanged, the text is laid over it as invisible, searchable text, and the TOC becomes bookmarks. The output is deterministic. Details: [How it works](#how-it-works).
+- **Copilot implementation (backup): drives a real browser like a person.** It opens the URL in headless Chrome with Selenium and switches into the `<iframe>` holding the flip-book. For each two-page spread it clicks zoom-in until the button is disabled (so the viewer loads its sharpest, 4x images), reads which page `<img>` elements are shown left to right, and saves those images from the browser's own cache with an in-page `fetch()` (with a `requests` fallback with retries). Then it zooms out and clicks next, until the next button is disabled. It restarts Chrome every 25 spreads to limit memory, and a watchdog kills a browser that hangs; after a restart it types the next unsaved page number into the viewer's page box and carries on. Finally `img2pdf` assembles the JPEGs, unchanged, into an image-only PDF. It only uses what the viewer shows, so it doesn't depend on `book.xml` or the folder layout, but it does depend on the viewer's buttons and iframe. Details: [its README](copilot_implementation/README.md#how-it-works).
+
+### Results
+
 | | Root implementation (`kawasaki_manual_downloader.py`) | Copilot implementation (`copilot_implementation/kawasaki_downloader.py`) |
 |---|---|---|
-| How it finds pages | Reads the viewer page's JSON to find the eBook folder, then fetches `book.xml` (ordered page list, size, max zoom) and `menu.xml` (TOC) directly | Opens the URL in headless Chrome (Selenium), looks for page `<img>`/`<canvas>` elements with generic CSS selectors, and clicks a "next" button |
-| How it fetches pages | Direct HTTP downloads of each page's JPEG (`page<ID>/x2/x2.jpg`, `x4/x4.jpg`, ...) and its `textpoint.xml` | Downloads whichever image `src` it finds on the top-level page (or a canvas snapshot) |
-| Dependencies | PyMuPDF, requests | selenium, webdriver-manager, requests, plus Chrome |
-| Output format | One PDF | Separate page image files (no PDF) |
-| Resolution / quality | Viewer's own JPEGs embedded unchanged: 4x = 3600x2540 px (default), 2x = 1800x1270 px, 1x = 900x635 px | Not measured (no pages were downloaded) |
-| Searchable text | Yes: invisible text layer from the viewer's `textpoint.xml` (no OCR). `pdftotext` finds "engine oil" 42 times in the 2x PDF | No (images only) |
+| How it finds pages | `book.xml` (ordered page IDs) and `menu.xml` (TOC), found via the viewer page's JSON | Headless Chrome: the page `<img>` elements the viewer displays in each spread, flipping with the viewer's next button |
+| How it fetches pages | Direct HTTP downloads of each page's JPEG and its `textpoint.xml` | The image the browser already loaded, via in-page `fetch()`; `requests` fallback |
+| Dependencies | PyMuPDF, requests | selenium, webdriver-manager, requests, img2pdf, plus Chrome |
+| Output format | One PDF | Page JPEGs + one PDF (`manual.pdf`) |
+| Resolution / quality | Viewer's own JPEGs embedded unchanged: 4x = 3600x2540 px (default), 2x = 1800x1270 px | Viewer's own 4x JPEGs (3600x2540 px), embedded unchanged. **All 212 page images are byte-identical** (same SHA-256) to the root implementation's 4x PDF |
+| Searchable text | Yes: invisible text layer from the viewer's `textpoint.xml` (no OCR). `pdftotext` finds "engine oil" 42 times in the 2x PDF | No (no OCR). `pdftotext` output is empty |
 | Bookmarks / TOC | Yes, 62 bookmarks from `menu.xml` | No |
-| Deterministic output / duplicate detection | Yes: a fresh download gave a byte-identical PDF (same sha256 as the committed 2x). `pdf_diff.py`, `check_pdfs_changed.sh`, `split` skip, and the opt-in pre-commit hook catch unchanged regenerated PDFs | No |
-| Speed | 2x from scratch (download + build): **431.3 s**. From the local cache (build only): 2x 41.6-44.6 s, 4x 42.0-43.4 s. 4x from scratch: not measured with the current version | `-m 2`: **407.4 s for 0 pages**. `-m 1`: **207.6 s for 0 pages**. A default run (`-m 100`) was stopped after about 4 min with 0 pages. Full run: not measured |
-| Output size | 2x: 49,884,379 bytes (49.9 MB). 4x: 117,195,430 bytes (117.2 MB, committed as 3 split parts) | 0 bytes (no files produced) |
-| Page count | 212 (matches `book.xml` and the viewer) | 0 |
-| `pdf_diff.py` between them | Not applicable: the Copilot implementation produced no PDF (or images) to compare | (same) |
-| Robustness / retries / rate limit | ≥0.5 s between requests, 5 retries with exponential backoff, image validation, progress/ETA | Fixed 1 s + 2 s sleeps per page. Single-attempt image downloads (errors are logged, not retried). 10 s implicit wait per missing selector. Errors in the loop are logged and skipped, so the run reports success even with 0 pages |
-| Generality | Any manual on the same FLIPPER viewer (`dispeBook?file=...&lang_code=...`). Not tested on manuals other than KX450 | Meant for generic page-flip sites via guessed selectors. Not tested on other sites |
-| Known limitations | Site-specific: depends on the viewer's `book.xml`/`page<ID>`/`textpoint.xml` layout. Cover/back-cover artwork has no text layer, so "KX450" isn't searchable there. A few illustration labels come out as run-together words in the text layer | On this site: invalid CSS selectors (`:contains()` is jQuery-only) raise an error every iteration. The flip-book is in a separate document (`/assets/manuals/<book>/index.html`) that the script never searches. No PDF output. See [its README](copilot_implementation/README.md) |
+| PDF page size | 210 mm wide (A5 landscape) by default | 3600 x 2540 pt (img2pdf's default of 1 px = 1 pt) |
+| Deterministic output / duplicate detection | Yes: a fresh download gave a byte-identical PDF (same sha256 as the committed 2x). `pdf_diff.py`, `check_pdfs_changed.sh`, `split` skip, and the opt-in pre-commit hook catch unchanged regenerated PDFs | Page images are identical to the source. PDF determinism not measured. Its per-page hash list can be checked with `sha256sum -c` |
+| Speed | 2x from scratch (download + build): **431.3 s**. From the local cache (build only): 2x 41.6-44.6 s, 4x 42.0-43.4 s. 4x from scratch: not measured with the current version | Full 4x run (default settings): **1043.3 s** (17.4 min), with 4 planned browser restarts and 0 restarts after errors. No cache |
+| Output size | 2x: 49,884,379 bytes (49.9 MB). 4x: 117,195,430 bytes (117.2 MB, committed as 3 split parts) | 4x PDF: 110,509,380 bytes (110.5 MB; not committed). Page images: 110,403,121 bytes |
+| Page count | 212 (matches `book.xml` and the viewer) | 212 (matches the viewer's last page number) |
+| `pdf_diff.py` root 4x vs Copilot PDF | Exit 1 (different). Every page differs in **size**, and pages with text differ in **text** (the root PDF has a text layer, the Copilot PDF has none). No page is reported with an image difference | (same) |
+| Robustness / retries / rate limit | ≥0.5 s between requests, 5 retries with exponential backoff, image validation, progress/ETA | ≥1 s wait after each flip/zoom click. Browser cache first, then `requests` with 3 attempts and backoff. Browser restart every 25 spreads, 180 s hang watchdog, up to 10 restarts after errors. Exits 1 on 0 pages or a page-count mismatch. Before the restart fix, two full runs stalled for good at about 85 pages |
+| Generality | Any manual on the same FLIPPER viewer (`dispeBook?file=...&lang_code=...`). Not tested on manuals other than KX450 | Same viewer; depends on its button IDs (`flipr-btn`, `zoomin-btn`, `flippage-word`) and iframe, not on its file layout. Generic fallback selectors untested. Not tested on manuals other than KX450 |
+| Known limitations | Site-specific: depends on the viewer's `book.xml`/`page<ID>`/`textpoint.xml` layout. Cover/back-cover artwork has no text layer, so "KX450" isn't searchable there. A few illustration labels come out as run-together words in the text layer | Slow, needs Chrome, breaks if the viewer UI changes. No text layer or bookmarks. Page order comes from the on-screen left-to-right position (correct for KX450). See [its README](copilot_implementation/README.md) |
 
 Notes:
-- Output folders: the root implementation's committed PDFs are in [`manuals/kawasaki_manual_downloader/`](manuals/kawasaki_manual_downloader/) (2x 49.9 MB, plus 4x 117.2 MB as 45 + 45 + 21.8 MiB parts). The Copilot implementation writes to `copilot_implementation/output/`, and its committed-output folder [`manuals/copilot_implementation/`](manuals/copilot_implementation/) has only a README, because no files were produced.
-- The Copilot implementation's unit tests (8 tests) and `validate_installation.py` pass. They test setup and helper logic, not a live download.
+- Output folders: the root implementation's committed PDFs are in [`manuals/kawasaki_manual_downloader/`](manuals/kawasaki_manual_downloader/) (2x 49.9 MB, plus 4x 117.2 MB as 45 + 45 + 21.8 MiB parts). The Copilot implementation writes to `copilot_implementation/output/`. Its PDF would duplicate the root 4x pages without the text layer and bookmarks, so it isn't committed (`manuals/copilot_implementation/*.pdf` is in `.gitignore`). [`manuals/copilot_implementation/`](manuals/copilot_implementation/) has the verification record and a 212-line per-page SHA-256 list.
+- The Copilot implementation's unit tests (11 tests) and `validate_installation.py` pass. They test helper logic, PDF assembly, and the non-zero exit when 0 pages are saved, not a live download.
 
 
 ## How it works

@@ -1,3 +1,4 @@
 requests>=2.25.1
 selenium>=4.0.0
 webdriver-manager>=3.8.0
+img2pdf>=0.5
