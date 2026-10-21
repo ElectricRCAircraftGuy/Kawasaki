@@ -9,6 +9,9 @@ import sys
 import os
 from pathlib import Path
 
+SCRIPT_DIR = Path(__file__).resolve().parent
+sys.path.insert(0, str(SCRIPT_DIR))
+
 def check_python_version():
     """Check if Python version is compatible."""
     print("Checking Python version...")
@@ -32,7 +35,7 @@ def check_required_files():
     
     all_present = True
     for file in required_files:
-        if Path(file).exists():
+        if (SCRIPT_DIR / file).exists():
             print(f"✓ {file}")
         else:
             print(f"✗ {file} missing")

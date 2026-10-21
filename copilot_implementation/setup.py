@@ -9,13 +9,15 @@ import sys
 import subprocess
 from pathlib import Path
 
+REQUIREMENTS = str(Path(__file__).resolve().parent / "requirements.txt")
+
 try:
     from webdriver_manager.chrome import ChromeDriverManager
     from selenium import webdriver
     from selenium.webdriver.chrome.service import Service
 except ImportError:
     print("Installing required packages...")
-    subprocess.check_call([sys.executable, "-m", "pip", "install", "-r", "requirements.txt"])
+    subprocess.check_call([sys.executable, "-m", "pip", "install", "-r", REQUIREMENTS])
     from webdriver_manager.chrome import ChromeDriverManager
     from selenium import webdriver
     from selenium.webdriver.chrome.service import Service
@@ -52,14 +54,14 @@ def main():
     print("=" * 25)
     
     # Check if requirements.txt exists
-    if not Path("requirements.txt").exists():
+    if not Path(REQUIREMENTS).exists():
         print("Error: requirements.txt not found!")
         return False
         
     # Install Python dependencies
     print("Installing Python dependencies...")
     try:
-        subprocess.check_call([sys.executable, "-m", "pip", "install", "-r", "requirements.txt"])
+        subprocess.check_call([sys.executable, "-m", "pip", "install", "-r", REQUIREMENTS])
         print("Dependencies installed successfully!")
     except subprocess.CalledProcessError as e:
         print(f"Error installing dependencies: {e}")

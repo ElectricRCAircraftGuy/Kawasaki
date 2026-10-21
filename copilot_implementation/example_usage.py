@@ -7,7 +7,9 @@ This script shows how to use the KawasakiDownloader class programmatically.
 
 import sys
 from pathlib import Path
-from kawasaki_downloader import KawasakiDownloader
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from kawasaki_downloader import KawasakiDownloader  # noqa: E402
 
 def download_example_manual():
     """Download an example manual with custom settings."""
@@ -16,7 +18,7 @@ def download_example_manual():
     manual_url = "https://pws.ktivs.net/dispeBook?file=99803-0401&lang_code=EN"
     
     # Custom output directory
-    output_dir = "my_manual_download"
+    output_dir = str(Path(__file__).resolve().parent / "output" / "my_manual_download")
     
     print("Kawasaki Manual Downloader Example")
     print("=" * 35)

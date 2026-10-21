@@ -19,6 +19,10 @@ from pathlib import Path
 from urllib.parse import urljoin, urlparse
 from typing import Optional, List, Dict, Any
 
+# Default output folder: copilot_implementation/output/ (next to this script),
+# so this implementation never writes into the repo's manuals/ folder.
+DEFAULT_OUTPUT_DIR = str(Path(__file__).resolve().parent / "output")
+
 import requests
 from selenium import webdriver
 from selenium.webdriver.common.by import By
@@ -31,7 +35,7 @@ from selenium.common.exceptions import TimeoutException, NoSuchElementException
 class KawasakiDownloader:
     """Main class for downloading Kawasaki manual pages."""
     
-    def __init__(self, output_dir: str = "manual_pages", headless: bool = True):
+    def __init__(self, output_dir: str = DEFAULT_OUTPUT_DIR, headless: bool = True):
         """
         Initialize the downloader.
         
@@ -40,7 +44,7 @@ class KawasakiDownloader:
             headless: Whether to run browser in headless mode
         """
         self.output_dir = Path(output_dir)
-        self.output_dir.mkdir(exist_ok=True)
+        self.output_dir.mkdir(parents=True, exist_ok=True)
         self.headless = headless
         self.driver = None
         self.session = requests.Session()
@@ -377,8 +381,9 @@ def main():
     )
     parser.add_argument(
         "-o", "--output", 
-        default="manual_pages",
-        help="Output directory for downloaded images (default: manual_pages)"
+        default=DEFAULT_OUTPUT_DIR,
+        help="Output directory for downloaded images "
+             "(default: copilot_implementation/output/)"
     )
     parser.add_argument(
         "-m", "--max-pages",
